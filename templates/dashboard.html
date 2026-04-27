@@ -3,13 +3,30 @@
 
 {% block content %}
 
+<!-- ── Animated Alert Banner ─────────────────────────────────────────────────── -->
+<div id="alert-banner" style="display:none; position:fixed; top:0; left:0; width:100%; z-index:9999;
+     padding:14px 20px; text-align:center; font-size:1.1rem; font-weight:700;
+     background: linear-gradient(90deg, #7f0000, #ef4444, #7f0000);
+     background-size: 200% 100%;
+     animation: slideBg 1s linear infinite;
+     box-shadow: 0 0 30px #ef444488;
+     letter-spacing:1px;">
+  <i class="fa-solid fa-triangle-exclamation me-2"></i>
+  <span id="alert-banner-text">HIGH CONFIDENCE ALERT — MOTION + SOUND DETECTED</span>
+  <button onclick="dismissBanner()" style="position:absolute; right:16px; top:50%;
+          transform:translateY(-50%); background:none; border:none; color:white;
+          font-size:1.2rem; cursor:pointer;">
+    <i class="fa-solid fa-xmark"></i>
+  </button>
+</div>
+
 <!-- ── Page header ──────────────────────────────────────────────────────────── -->
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
     <h4 class="mb-0 fw-bold">
       <i class="fa-solid fa-gauge me-2" style="color:#58a6ff;"></i>Live Dashboard
     </h4>
-    <small class="text-secondary">Real-time monitoring · auto-refreshes every 5 s</small>
+    <small class="text-secondary">Real-time monitoring · live updates every 1 s</small>
   </div>
   <span id="status-badge" class="badge fs-6 px-3 py-2" style="background:#238636;">
     <i class="fa-solid fa-circle-dot me-1"></i>Monitoring
@@ -47,18 +64,6 @@
     </div>
   </div>
 
-</div>
-
-<!-- ── Event Statistics Chart ───────────────────────────────────────────────── -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="stat-card p-3">
-      <h6 class="text-secondary mb-3">
-        <i class="fa-solid fa-chart-line me-2"></i>Event Statistics (Last 24h)
-      </h6>
-      <canvas id="eventsChart" width="400" height="150"></canvas>
-    </div>
-  </div>
 </div>
 
 <!-- ── Live feed + recent events ────────────────────────────────────────────── -->
@@ -111,13 +116,119 @@
 
 </div><!-- /row -->
 
+<!-- ── Charts ────────────────────────────────────────────────────────────────── -->
+<div class="row g-4 mt-2">
+
+  <!-- Events per hour today -->
+  <div class="col-lg-7">
+    <div class="stat-card p-3">
+      <h6 class="text-secondary mb-3">
+        <i class="fa-solid fa-chart-bar me-2"></i>Events per Hour — Today
+      </h6>
+      <canvas id="hourlyChart" height="110"></canvas>
+    </div>
+  </div>
+
+  <!-- Events per day last 7 days -->
+  <div class="col-lg-5">
+    <div class="stat-card p-3">
+      <h6 class="text-secondary mb-3">
+        <i class="fa-solid fa-chart-line me-2"></i>Events per Day — Last 7 Days
+      </h6>
+      <canvas id="dailyChart" height="110"></canvas>
+    </div>
+  </div>
+
+</div>
+
 {% endblock %}
 
 
 {% block scripts %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// ── Auto-refresh stat cards every 5 seconds via /api/stats ──────────────────
-// Uses the browser's built-in fetch() API — no jQuery or other libraries needed.
+// ── Chart setup ──────────────────────────────────────────────────────────────
+const chartDefaults = {
+  color: "#e6edf3",
+  borderColor: "#30363d",
+};
+Chart.defaults.color          = chartDefaults.color;
+Chart.defaults.borderColor    = chartDefaults.borderColor;
+
+const hourlyCtx = document.getElementById("hourlyChart").getContext("2d");
+const dailyCtx  = document.getElementById("dailyChart").getContext("2d");
+
+const hourlyChart = new Chart(hourlyCtx, {
+  type: "bar",
+  data: {
+    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+    datasets: [{
+      label: "Events",
+      data: new Array(24).fill(0),
+      backgroundColor: "#58a6ff88",
+      borderColor: "#58a6ff",
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: "#30363d" }, ticks: { font: { size: 10 } } },
+      y: { grid: { color: "#30363d" }, beginAtZero: true, ticks: { stepSize: 1 } }
+    }
+  }
+});
+
+const dailyChart = new Chart(dailyCtx, {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [{
+      label: "Events",
+      data: [],
+      borderColor: "#f97316",
+      backgroundColor: "#f9731622",
+      fill: true,
+      tension: 0.3,
+      pointBackgroundColor: "#f97316",
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: "#30363d" }, ticks: { font: { size: 10 } } },
+      y: { grid: { color: "#30363d" }, beginAtZero: true, ticks: { stepSize: 1 } }
+    }
+  }
+});
+
+// ── Alert banner ─────────────────────────────────────────────────────────────
+let bannerDismissed = false;
+
+function showBanner(text) {
+  const banner = document.getElementById("alert-banner");
+  document.getElementById("alert-banner-text").textContent = text;
+  banner.style.display = "block";
+  document.body.style.paddingTop = "52px";
+}
+
+function hideBanner() {
+  document.getElementById("alert-banner").style.display = "none";
+  document.body.style.paddingTop = "0";
+}
+
+function dismissBanner() {
+  bannerDismissed = true;
+  hideBanner();
+  // Re-enable after 60s so it shows again if a new alert fires
+  setTimeout(() => { bannerDismissed = false; }, 60000);
+}
+
+// ── Refresh stats every 1 second ─────────────────────────────────────────────
+let lastEventId = 0;
+
 function refreshStats() {
   fetch("{{ url_for('api_stats') }}")
     .then(r => r.json())
@@ -126,19 +237,44 @@ function refreshStats() {
       document.getElementById("cnt-audio").textContent     = data.counts.audio           || 0;
       document.getElementById("cnt-yolo").textContent      = data.counts.yolo            || 0;
       document.getElementById("cnt-highconf").textContent  = data.counts.high_confidence || 0;
+
+      // Status badge
+      const badge = document.getElementById("status-badge");
+      if (data.high_conf) {
+        badge.style.background = "#ef4444";
+        badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>HIGH ALERT';
+        if (!bannerDismissed) showBanner("!! HIGH CONFIDENCE ALERT — MOTION + SOUND DETECTED !!");
+      } else if (data.audio_active) {
+        badge.style.background = "#3b82f6";
+        badge.innerHTML = '<i class="fa-solid fa-microphone me-1"></i>Audio Alert';
+        hideBanner();
+      } else if (data.running && data.status && data.status.includes("INTRUSION")) {
+        badge.style.background = "#f97316";
+        badge.innerHTML = '<i class="fa-solid fa-circle-dot me-1"></i>Motion Detected';
+        if (!bannerDismissed) showBanner("!! INTRUSION DETECTED — MOTION IN FRAME !!");
+      } else {
+        badge.style.background = "#238636";
+        badge.innerHTML = '<i class="fa-solid fa-circle-dot me-1"></i>Monitoring';
+        hideBanner();
+      }
     })
-    .catch(() => {});   // silently ignore network errors
+    .catch(() => {});
 }
 
-// ── Auto-refresh recent events every 5 seconds via /api/events ──────────────
+// ── Refresh recent events every 1 second — flash new ones ────────────────────
 function refreshRecent() {
   fetch("{{ url_for('api_events') }}?limit=5")
     .then(r => r.json())
     .then(events => {
-      const list = document.getElementById("recent-events-list");
       if (!events.length) return;
-      list.innerHTML = events.map(ev => `
-        <div class="d-flex align-items-start mb-2 pb-2" style="border-bottom:1px solid #30363d;">
+      const list = document.getElementById("recent-events-list");
+      const topId = events[0].id;
+      const isNew = topId !== lastEventId && lastEventId !== 0;
+      lastEventId = topId;
+
+      list.innerHTML = events.map((ev, i) => `
+        <div class="d-flex align-items-start mb-2 pb-2 ${i === 0 && isNew ? 'new-event' : ''}"
+             style="border-bottom:1px solid #30363d;">
           <span class="badge badge-${ev.event_type} me-2 mt-1" style="min-width:90px;">${ev.event_type}</span>
           <div>
             <div style="font-size:.82rem;">${ev.label || '—'}</div>
@@ -149,80 +285,47 @@ function refreshRecent() {
     .catch(() => {});
 }
 
-// ── Initialize Event Statistics Chart ────────────────────────────────────────
-function initChart() {
-  const ctx = document.getElementById('eventsChart').getContext('2d');
-  const initialCounts = {{ counts | tojson }};
-  window.eventsChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Motion', 'Audio', 'YOLO', 'High Confidence'],
-      datasets: [{
-        label: 'Events',
-        data: [
-          initialCounts.motion || 0,
-          initialCounts.audio || 0,
-          initialCounts.yolo || 0,
-          initialCounts.high_confidence || 0
-        ],
-        backgroundColor: [
-          '#f97316',  // motion
-          '#3b82f6',  // audio
-          '#8b5cf6',  // yolo
-          '#ef4444'   // high conf
-        ],
-        borderColor: [
-          '#ea580c',
-          '#2563eb',
-          '#7c3aed',
-          '#dc2626'
-        ],
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          grid: { color: '#30363d' },
-          ticks: { color: '#e6edf3' }
-        },
-        x: {
-          grid: { color: '#30363d' },
-          ticks: { color: '#e6edf3' }
-        }
-      }
-    }
-  });
-}
-
-// Update chart data
-function updateChart() {
-  fetch("{{ url_for('api_stats') }}")
+// ── Refresh charts every 30 seconds ──────────────────────────────────────────
+function refreshCharts() {
+  fetch("{{ url_for('api_chart_data') }}")
     .then(r => r.json())
     .then(data => {
-      if (window.eventsChart) {
-        window.eventsChart.data.datasets[0].data = [
-          data.counts.motion || 0,
-          data.counts.audio || 0,
-          data.counts.yolo || 0,
-          data.counts.high_confidence || 0
-        ];
-        window.eventsChart.update();
-      }
+      hourlyChart.data.datasets[0].data = data.hourly;
+      hourlyChart.update("none");
+
+      dailyChart.data.labels                = data.daily.labels.map(d => d.slice(5));
+      dailyChart.data.datasets[0].data      = data.daily.values;
+      dailyChart.update("none");
     })
     .catch(() => {});
 }
 
-// Initialize chart on page load
-document.addEventListener('DOMContentLoaded', initChart);
+// Initial load
+refreshCharts();
 
-setInterval(refreshStats,  5000);
-setInterval(refreshRecent, 5000);
-setInterval(updateChart,  5000);
+setInterval(refreshStats,  1000);
+setInterval(refreshRecent, 1000);
+setInterval(refreshCharts, 30000);
 </script>
+
+<style>
+@keyframes flashNew {
+  0%   { background: #1f4a1f; }
+  100% { background: transparent; }
+}
+.new-event { animation: flashNew 1.5s ease-out; }
+
+@keyframes slideBg {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 10px #ef444466; }
+  50%       { box-shadow: 0 0 40px #ef4444cc; }
+}
+#alert-banner {
+  animation: slideBg 1s linear infinite, pulse-border 0.8s ease-in-out infinite !important;
+}
+</style>
 {% endblock %}
