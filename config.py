@@ -8,7 +8,7 @@ load_dotenv()   # reads .env file into environment variables
 SECRET_KEY           = "change_this_to_a_random_string"  # used to sign Flask sessions
 DASHBOARD_USERNAME   = "admin"
 DASHBOARD_PASSWORD   = "admin123"   # change before demo
-DASHBOARD_PORT       = 5001
+DASHBOARD_PORT       = 5000
 
 # Fill in your credentials before running sprint3_main.py
 
